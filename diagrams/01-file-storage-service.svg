@@ -1,0 +1,239 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2328.5" height="2656" viewBox="-40 -170 2328.5 2656">
+<rect x="-40.000000" y="-170.000000" width="2328.500000" height="2656.000000" fill="#fff"/>
+<defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="context-stroke"/></marker></defs>
+<text x="730.0" y="-82.0" font-size="28" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#1e1e1e">File Storage Service (S3 / Dropbox style) — High-Level Architecture</text>
+<text x="730.0" y="-52.0" font-size="14" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#868e96">control plane = thin lines through the API tier   |   data plane = thick red lines, bytes never touch your servers</text>
+<rect x="40" y="30" width="430" height="175" rx="10" fill="#f8f9fa" stroke="#868e96" stroke-width="1" stroke-dasharray="10,6"/>
+<text x="56" y="55.0" font-size="13" font-family="Helvetica, sans-serif" text-anchor="start" fill="#343a40">LEGEND</text>
+<polyline points="62,82 132,82" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#a)"/>
+<text x="146" y="86.0" font-size="12" font-family="Helvetica, sans-serif" text-anchor="start" fill="#495057">control plane — small JSON, through the API tier</text>
+<polyline points="62,122 132,122" fill="none" stroke="#e03131" stroke-width="4" marker-end="url(#a)"/>
+<text x="146" y="126.0" font-size="12" font-family="Helvetica, sans-serif" text-anchor="start" fill="#495057">data plane — the bytes, bypassing the API tier</text>
+<polyline points="62,162 132,162" fill="none" stroke="#1e1e1e" stroke-width="1" stroke-dasharray="10,6" marker-end="url(#a)"/>
+<text x="146" y="166.0" font-size="12" font-family="Helvetica, sans-serif" text-anchor="start" fill="#495057">async / background</text>
+<rect x="545" y="30" width="420" height="200" rx="10" fill="#f8f9fa" stroke="#868e96" stroke-width="1" stroke-dasharray="10,6"/>
+<text x="560" y="55.0" font-size="13" font-family="Helvetica, sans-serif" text-anchor="start" fill="#343a40">BACK-OF-ENVELOPE</text>
+<text x="560" y="80.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057">100M users × 10 uploads/day = 1B uploads/day</text>
+<text x="560" y="95.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057">  → ~12K writes/sec avg, ~60K peak (5×)</text>
+<text x="560" y="110.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057">  → 1 PB/day ingest ⇒ dedup is survival, not polish</text>
+<text x="560" y="125.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057">reads ≈ 10× writes ≈ 120K reads/sec</text>
+<text x="560" y="140.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057">  → almost all must terminate at the CDN</text>
+<text x="560" y="155.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057"></text>
+<text x="560" y="170.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057">ceiling is the METADATA DB, not storage —</text>
+<text x="560" y="185.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057">the object store scales itself.</text>
+<rect x="40" y="330" width="210" height="300" rx="10" fill="#a5d8ff" stroke="#1971c2" stroke-width="2"/>
+<text x="145.0" y="443.0" font-size="16" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#1971c2">Client</text>
+<text x="145.0" y="463.0" font-size="16" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#1971c2">(Web / Mobile / CLI)</text>
+<text x="145.0" y="485.0" font-size="12" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">chunk plan + uploadId persisted locally</text>
+<text x="145.0" y="500.0" font-size="12" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057"></text>
+<text x="145.0" y="515.0" font-size="12" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">.part file + sidecar</text>
+<text x="145.0" y="530.0" font-size="12" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">{versionId, etag, bytesWritten}</text>
+<rect x="330" y="350" width="120" height="90" rx="10" fill="#e9ecef" stroke="#343a40" stroke-width="2"/>
+<text x="390.0" y="390.5" font-size="16" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#343a40">LB</text>
+<text x="390.0" y="412.5" font-size="12" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">TLS term.</text>
+<rect x="330" y="490" width="190" height="85" rx="10" fill="#ffc9c9" stroke="#e03131" stroke-width="2"/>
+<text x="425.0" y="520.5" font-size="16" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#e03131">Redis</text>
+<text x="425.0" y="542.5" font-size="12" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">hot metadata · sessions</text>
+<text x="425.0" y="557.5" font-size="12" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">hot-shard relief</text>
+<rect x="545" y="270" width="400" height="250" rx="10" fill="none" stroke="#343a40" stroke-width="1" stroke-dasharray="10,6"/>
+<text x="745.0" y="291.0" font-size="13" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#343a40">API Tier — stateless (control plane only)</text>
+<rect x="565" y="315" width="165" height="70" rx="10" fill="#ffec99" stroke="#f08c00" stroke-width="2"/>
+<text x="647.5" y="339.25" font-size="16" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#f08c00">Upload Svc</text>
+<text x="647.5" y="360.25" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">initiate / complete</text>
+<text x="647.5" y="374.0" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">ListParts / re-sign</text>
+<rect x="750" y="315" width="165" height="70" rx="10" fill="#ffec99" stroke="#f08c00" stroke-width="2"/>
+<text x="832.5" y="339.25" font-size="16" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#f08c00">Download Svc</text>
+<text x="832.5" y="360.25" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">issue signed URL</text>
+<text x="832.5" y="374.0" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">pinned to versionId</text>
+<rect x="565" y="405" width="165" height="70" rx="10" fill="#ffec99" stroke="#f08c00" stroke-width="2"/>
+<text x="647.5" y="436.125" font-size="16" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#f08c00">Auth / Perm Svc</text>
+<text x="647.5" y="457.125" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">checked at URL-issue time</text>
+<rect x="750" y="405" width="165" height="70" rx="10" fill="#ffec99" stroke="#f08c00" stroke-width="2"/>
+<text x="832.5" y="436.125" font-size="16" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#f08c00">Metadata Svc</text>
+<text x="832.5" y="457.125" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">files / versions / blocks</text>
+<rect x="1060" y="290" width="345" height="210" rx="10" fill="none" stroke="#6741d9" stroke-width="1" stroke-dasharray="10,6"/>
+<text x="1232.5" y="311.0" font-size="13" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#6741d9">Metadata DB — SQL, sharded by owner_id</text>
+<rect x="1080" y="335" width="100" height="60" rx="10" fill="#d0bfff" stroke="#6741d9" stroke-width="2"/>
+<text x="1130.0" y="360.625" font-size="13" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#6741d9">Shard 1</text>
+<text x="1130.0" y="379.875" font-size="10" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">P + replicas</text>
+<rect x="1192" y="335" width="100" height="60" rx="10" fill="#d0bfff" stroke="#6741d9" stroke-width="2"/>
+<text x="1242.0" y="360.625" font-size="13" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#6741d9">Shard 2</text>
+<text x="1242.0" y="379.875" font-size="10" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">P + replicas</text>
+<rect x="1304" y="335" width="90" height="60" rx="10" fill="#d0bfff" stroke="#6741d9" stroke-width="2"/>
+<text x="1349.0" y="360.625" font-size="13" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#6741d9">Shard N</text>
+<text x="1349.0" y="379.875" font-size="10" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">P + replicas</text>
+<text x="1232.5" y="423.0" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">files · file_versions · blocks(refcount) · permissions · shares</text>
+<text x="1232.5" y="449.0" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#868e96">strong consistency within a shard</text>
+<text x="1232.5" y="462.75" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#868e96">(rename / move / perms = ACID)</text>
+<rect x="545" y="640" width="240" height="110" rx="10" fill="#b2f2bb" stroke="#2f9e44" stroke-width="2"/>
+<text x="665.0" y="683.0" font-size="16" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#2f9e44">CDN (edge)</text>
+<text x="665.0" y="705.0" font-size="12" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">signed URLs · Range / 206</text>
+<text x="665.0" y="720.0" font-size="12" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">byte-range slicing (8 MB segments)</text>
+<rect x="890" y="620" width="400" height="150" rx="10" fill="#b2f2bb" stroke="#2f9e44" stroke-width="2"/>
+<text x="1090.0" y="675.5" font-size="16" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#2f9e44">Blob / Object Store</text>
+<text x="1090.0" y="697.5" font-size="12" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">multi-region · erasure coded RS(10+4) ≈ 1.4×</text>
+<text x="1090.0" y="712.5" font-size="12" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">IMMUTABLE versioned keys — new version = new key</text>
+<text x="1090.0" y="727.5" font-size="12" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">multipart parts held durably until complete / abort</text>
+<rect x="1450" y="640" width="170" height="80" rx="10" fill="#e9ecef" stroke="#343a40" stroke-width="2"/>
+<text x="1535.0" y="675.5" font-size="16" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#343a40">Kafka</text>
+<text x="1535.0" y="697.5" font-size="12" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">file.created</text>
+<rect x="1450" y="770" width="265" height="240" rx="10" fill="none" stroke="#343a40" stroke-width="1" stroke-dasharray="10,6"/>
+<text x="1582.5" y="791.0" font-size="13" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#343a40">Async workers</text>
+<rect x="1468" y="812" width="230" height="30" rx="10" fill="#f8f9fa" stroke="#343a40" stroke-width="2"/>
+<text x="1583.0" y="831.125" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#343a40">dedup (refcount++)</text>
+<rect x="1468" y="850" width="230" height="30" rx="10" fill="#f8f9fa" stroke="#343a40" stroke-width="2"/>
+<text x="1583.0" y="869.125" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#343a40">virus scan</text>
+<rect x="1468" y="888" width="230" height="30" rx="10" fill="#f8f9fa" stroke="#343a40" stroke-width="2"/>
+<text x="1583.0" y="907.125" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#343a40">thumbnail / preview</text>
+<rect x="1468" y="926" width="230" height="30" rx="10" fill="#f8f9fa" stroke="#343a40" stroke-width="2"/>
+<text x="1583.0" y="945.125" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#343a40">cross-region replication</text>
+<rect x="1468" y="964" width="230" height="30" rx="10" fill="#f8f9fa" stroke="#343a40" stroke-width="2"/>
+<text x="1583.0" y="983.125" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#343a40">search index update</text>
+<rect x="890" y="850" width="400" height="70" rx="10" fill="#fff5f5" stroke="#e03131" stroke-width="2"/>
+<text x="1090.0" y="873.5" font-size="14" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#e03131">GC worker</text>
+<text x="1090.0" y="894.0" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">soft-delete → refcount-- → purge at refcount==0</text>
+<text x="1090.0" y="907.75" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">abort stale uploadIds (7d TTL) — you ARE billed for orphaned parts</text>
+<polyline points="250,390 330,393" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#a)"/>
+<text x="290.0" y="369.0" font-size="11" font-family="monospace" text-anchor="middle" fill="#495057">HTTPS</text>
+<polyline points="450,395 545,393" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#a)"/>
+<polyline points="600,475 520,520" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#a)"/>
+<text x="600.0" y="540.0" font-size="10" font-family="monospace" text-anchor="middle" fill="#495057">perm check</text>
+<polyline points="915,440 1060,440" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#a)"/>
+<text x="1002.0" y="422.0" font-size="10" font-family="monospace" text-anchor="middle" fill="#495057">read / write</text>
+<text x="1002.0" y="434.5" font-size="10" font-family="monospace" text-anchor="middle" fill="#495057">metadata</text>
+<polyline points="860,520 860,570 1010,570 1010,620" fill="none" stroke="#1e1e1e" stroke-width="2" stroke-dasharray="10,6" marker-end="url(#a)"/>
+<text x="760.0" y="609.0" font-size="11" font-family="monospace" text-anchor="middle" fill="#495057">CreateMultipartUpload · ListParts · CompleteMultipartUpload   (control only)</text>
+<polyline points="905,520 905,545 1530,545 1530,640" fill="none" stroke="#1e1e1e" stroke-width="2" stroke-dasharray="10,6" marker-end="url(#a)"/>
+<text x="1300.0" y="526.0" font-size="10" font-family="monospace" text-anchor="middle" fill="#495057">file.created event</text>
+<polyline points="1530,720 1530,770" fill="none" stroke="#1e1e1e" stroke-width="2" stroke-dasharray="10,6" marker-end="url(#a)"/>
+<polyline points="1450,830 1300,772" fill="none" stroke="#1e1e1e" stroke-width="1" stroke-dasharray="10,6" marker-end="url(#a)"/>
+<text x="1362.0" y="792.0" font-size="10" font-family="monospace" text-anchor="middle" fill="#495057">write derived</text>
+<text x="1362.0" y="804.5" font-size="10" font-family="monospace" text-anchor="middle" fill="#495057">+ replicate</text>
+<polyline points="1090,850 1090,770" fill="none" stroke="#e03131" stroke-width="1" stroke-dasharray="10,6" marker-end="url(#a)"/>
+<polyline points="250,600 430,695 545,695" fill="none" stroke="#e03131" stroke-width="4" marker-end="url(#a)"/>
+<text x="380.0" y="723.0" font-size="11" font-family="monospace" text-anchor="middle" fill="#495057">GET  Range: bytes=N-   If-Range: &lt;etag&gt;</text>
+<polyline points="785,695 890,695" fill="none" stroke="#e03131" stroke-width="4" marker-end="url(#a)"/>
+<text x="837.0" y="788.0" font-size="10" font-family="monospace" text-anchor="middle" fill="#495057">origin fetch (sliced)</text>
+<polyline points="145,630 145,800 1000,800 1000,770" fill="none" stroke="#e03131" stroke-width="4" marker-end="url(#a)"/>
+<text x="600.0" y="821.0" font-size="13" font-family="monospace" text-anchor="middle" fill="#495057">presigned PUT / GET — bytes go client ↔ blob store directly, never through the API tier</text>
+<text x="730.0" y="1144.0" font-size="24" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#1e1e1e">Upload fails mid-transfer — resume path (part-based / S3 multipart)</text>
+<text x="730.0" y="1171.0" font-size="13" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#868e96">server-side state: uploadId + set of completed parts  ·  a part is ATOMIC — an interrupted PUT is discarded, never half-stored</text>
+<rect x="40" y="1200" width="185" height="130" rx="10" fill="#a5d8ff" stroke="#1971c2" stroke-width="2"/>
+<text x="132.5" y="1246.625" font-size="14" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#1971c2">0. plan</text>
+<text x="132.5" y="1267.125" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">chunkSize + partCount</text>
+<text x="132.5" y="1280.875" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">fileIdentity{size,mtime,hash}</text>
+<text x="132.5" y="1294.625" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">persist locally</text>
+<polyline points="225,1265.0 302,1265.0" fill="none" stroke="#1971c2" stroke-width="2" marker-end="url(#a)"/>
+<rect x="302" y="1200" width="185" height="130" rx="10" fill="#ffec99" stroke="#f08c00" stroke-width="2"/>
+<text x="394.5" y="1246.625" font-size="14" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#f08c00">1. initiate</text>
+<text x="394.5" y="1267.125" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">row status=&#x27;pending&#x27;</text>
+<text x="394.5" y="1280.875" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">CreateMultipartUpload</text>
+<text x="394.5" y="1294.625" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">→ uploadId + signed URLs</text>
+<polyline points="487,1265.0 564,1265.0" fill="none" stroke="#f08c00" stroke-width="2" marker-end="url(#a)"/>
+<rect x="564" y="1200" width="185" height="130" rx="10" fill="#b2f2bb" stroke="#2f9e44" stroke-width="2"/>
+<text x="656.5" y="1253.5" font-size="14" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#2f9e44">2. PUT parts</text>
+<text x="656.5" y="1274.0" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">parallel, direct to blob</text>
+<text x="656.5" y="1287.75" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">1,2,3 OK · 4,5,6 in flight</text>
+<polyline points="749,1265.0 826,1265.0" fill="none" stroke="#2f9e44" stroke-width="2" marker-end="url(#a)"/>
+<rect x="826" y="1200" width="185" height="130" rx="10" fill="#ffc9c9" stroke="#e03131" stroke-width="2"/>
+<text x="918.5" y="1246.625" font-size="14" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#e03131">✗ network drop</text>
+<text x="918.5" y="1267.125" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">blob keeps 1,2,3</text>
+<text x="918.5" y="1280.875" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">in-flight 4,5,6 discarded</text>
+<text x="918.5" y="1294.625" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">API tier knows nothing</text>
+<polyline points="1011,1265.0 1088,1265.0" fill="none" stroke="#e03131" stroke-width="2" marker-end="url(#a)"/>
+<rect x="1088" y="1200" width="185" height="130" rx="10" fill="#e9ecef" stroke="#343a40" stroke-width="2"/>
+<text x="1180.5" y="1246.625" font-size="14" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#343a40">3. backoff</text>
+<text x="1180.5" y="1267.125" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">exp backoff + JITTER</text>
+<text x="1180.5" y="1280.875" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">wake on connectivity evt</text>
+<text x="1180.5" y="1294.625" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">403 ⇒ URL expired</text>
+<rect x="40" y="1420" width="185" height="130" rx="10" fill="#ffec99" stroke="#f08c00" stroke-width="2"/>
+<text x="132.5" y="1466.625" font-size="14" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#f08c00">4. GET /uploads/{id}</text>
+<text x="132.5" y="1487.125" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">API → ListParts</text>
+<text x="132.5" y="1500.875" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">→ [{n,etag,size}]</text>
+<text x="132.5" y="1514.625" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">server list = truth</text>
+<polyline points="225,1485.0 302,1485.0" fill="none" stroke="#f08c00" stroke-width="2" marker-end="url(#a)"/>
+<rect x="302" y="1420" width="185" height="130" rx="10" fill="#ffc9c9" stroke="#e03131" stroke-width="2"/>
+<text x="394.5" y="1466.625" font-size="14" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#e03131">5. validate</text>
+<text x="394.5" y="1487.125" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">size/mtime/hash unchanged?</text>
+<text x="394.5" y="1500.875" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">changed ⇒ ABORT + restart</text>
+<text x="394.5" y="1514.625" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">(else silent corruption)</text>
+<polyline points="487,1485.0 564,1485.0" fill="none" stroke="#e03131" stroke-width="2" marker-end="url(#a)"/>
+<rect x="564" y="1420" width="185" height="130" rx="10" fill="#ffec99" stroke="#f08c00" stroke-width="2"/>
+<text x="656.5" y="1466.625" font-size="14" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#f08c00">6. re-mint URLs</text>
+<text x="656.5" y="1487.125" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">POST /uploads/{id}/urls</text>
+<text x="656.5" y="1500.875" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">missing parts only</text>
+<text x="656.5" y="1514.625" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">= revocation checkpoint</text>
+<polyline points="749,1485.0 826,1485.0" fill="none" stroke="#f08c00" stroke-width="2" marker-end="url(#a)"/>
+<rect x="826" y="1420" width="185" height="130" rx="10" fill="#b2f2bb" stroke="#2f9e44" stroke-width="2"/>
+<text x="918.5" y="1473.5" font-size="14" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#2f9e44">7. PUT missing</text>
+<text x="918.5" y="1494.0" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">parts 4..20, checksummed</text>
+<text x="918.5" y="1507.75" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">persist each etag as it lands</text>
+<polyline points="1011,1485.0 1088,1485.0" fill="none" stroke="#2f9e44" stroke-width="2" marker-end="url(#a)"/>
+<rect x="1088" y="1420" width="185" height="130" rx="10" fill="#d0bfff" stroke="#6741d9" stroke-width="2"/>
+<text x="1180.5" y="1466.625" font-size="14" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#6741d9">8. complete</text>
+<text x="1180.5" y="1487.125" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">verify parts → assemble</text>
+<text x="1180.5" y="1500.875" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">TXN: version row +</text>
+<text x="1180.5" y="1514.625" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">status=&#x27;active&#x27;  (idempotent)</text>
+<polyline points="1180.5,1330 1180.5,1375 132.5,1375 132.5,1420" fill="none" stroke="#343a40" stroke-width="2" marker-end="url(#a)"/>
+<rect x="40" y="1640" width="1410" height="90" rx="10" fill="#f8f9fa" stroke="#868e96" stroke-width="1" stroke-dasharray="10,6"/>
+<text x="52" y="1672.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057">If the client lost its local manifest (reinstall / new device):  GET /uploads?contentHash=…  → server&#x27;s own pending rows.   Never resumed?  blob lifecycle aborts incomplete multipart uploads after ~7d (you ARE billed for orphaned parts) and GC drops the pending row.</text>
+<text x="52" y="1687.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057">Chunk size is a RESUME tradeoff, not just throughput: a dropped connection wastes one whole part — mobile-heavy clients argue for the 5 MB end.</text>
+<text x="730.0" y="1864.0" font-size="24" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#1e1e1e">Download fails mid-transfer — resume path (HTTP Range, RFC 7233)</text>
+<text x="730.0" y="1891.0" font-size="13" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#868e96">NO server-side session — the partial lives entirely on the client; the server is stateless and unaware anything was in progress</text>
+<rect x="40" y="1920" width="230" height="130" rx="10" fill="#a5d8ff" stroke="#1971c2" stroke-width="2"/>
+<text x="155.0" y="1966.625" font-size="14" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#1971c2">0. start</text>
+<text x="155.0" y="1987.125" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">302 → signed CDN URL</text>
+<text x="155.0" y="2000.875" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">write photo.mp4.part</text>
+<text x="155.0" y="2014.625" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">+ sidecar{versionId,etag,total}</text>
+<polyline points="270,1985.0 330,1985.0" fill="none" stroke="#1971c2" stroke-width="2" marker-end="url(#a)"/>
+<rect x="330" y="1920" width="230" height="130" rx="10" fill="#ffc9c9" stroke="#e03131" stroke-width="2"/>
+<text x="445.0" y="1966.625" font-size="14" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#e03131">✗ drop @ byte N</text>
+<text x="445.0" y="1987.125" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">client holds N bytes</text>
+<text x="445.0" y="2000.875" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">fsync before recording N</text>
+<text x="445.0" y="2014.625" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">(else a hole in the file)</text>
+<polyline points="560,1985.0 620,1985.0" fill="none" stroke="#e03131" stroke-width="2" marker-end="url(#a)"/>
+<rect x="620" y="1920" width="230" height="130" rx="10" fill="#ffec99" stroke="#f08c00" stroke-width="2"/>
+<text x="735.0" y="1966.625" font-size="14" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#f08c00">1. URL expired?</text>
+<text x="735.0" y="1987.125" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">403 ⇒ re-issue with</text>
+<text x="735.0" y="2000.875" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">?version=&lt;versionId&gt;</text>
+<text x="735.0" y="2014.625" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">NEVER resolve &#x27;latest&#x27;</text>
+<polyline points="850,1985.0 910,1985.0" fill="none" stroke="#f08c00" stroke-width="2" marker-end="url(#a)"/>
+<rect x="910" y="1920" width="230" height="130" rx="10" fill="#b2f2bb" stroke="#2f9e44" stroke-width="2"/>
+<text x="1025.0" y="1973.5" font-size="14" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#2f9e44">2. ranged GET</text>
+<text x="1025.0" y="1994.0" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">Range: bytes=N-</text>
+<text x="1025.0" y="2007.75" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">If-Range: &quot;v3-abc&quot;</text>
+<polyline points="1140,1985.0 1200,1985.0" fill="none" stroke="#2f9e44" stroke-width="2" marker-end="url(#a)"/>
+<rect x="1200" y="1920" width="230" height="130" rx="10" fill="#d0bfff" stroke="#6741d9" stroke-width="2"/>
+<text x="1315.0" y="1973.5" font-size="14" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#6741d9">3. verify + commit</text>
+<text x="1315.0" y="1994.0" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">whole-file hash vs content_hash</text>
+<text x="1315.0" y="2007.75" font-size="11" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">atomic rename .part → final</text>
+<polyline points="1025.0,2050 1025.0,2080 870.0,2080 870.0,2299" fill="none" stroke="#1e1e1e" stroke-width="1" stroke-dasharray="10,6" marker-end="url(#a)"/>
+<rect x="910" y="2110" width="230" height="66" rx="10" fill="#b2f2bb" stroke="#2f9e44" stroke-width="2"/>
+<text x="1025.0" y="2138.625" font-size="13" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#2f9e44">206 Partial Content</text>
+<text x="1025.0" y="2157.875" font-size="10" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">range honored → append</text>
+<polyline points="870,2143 910,2143" fill="none" stroke="#2f9e44" stroke-width="1" stroke-dasharray="10,6" marker-end="url(#a)"/>
+<rect x="910" y="2188" width="230" height="66" rx="10" fill="#ffc9c9" stroke="#e03131" stroke-width="2"/>
+<text x="1025.0" y="2216.625" font-size="13" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#e03131">200 OK (full body)</text>
+<text x="1025.0" y="2235.875" font-size="10" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">If-Range MISMATCH → discard partial, restart</text>
+<polyline points="870,2221 910,2221" fill="none" stroke="#e03131" stroke-width="1" stroke-dasharray="10,6" marker-end="url(#a)"/>
+<rect x="910" y="2266" width="230" height="66" rx="10" fill="#ffec99" stroke="#f08c00" stroke-width="2"/>
+<text x="1025.0" y="2294.625" font-size="13" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#f08c00">416 Not Satisfiable</text>
+<text x="1025.0" y="2313.875" font-size="10" font-family="Helvetica, sans-serif" text-anchor="middle" fill="#495057">offset ≥ size → partial stale, restart</text>
+<polyline points="870,2299 910,2299" fill="none" stroke="#f08c00" stroke-width="1" stroke-dasharray="10,6" marker-end="url(#a)"/>
+<rect x="40" y="2110" width="795" height="230" rx="10" fill="#f8f9fa" stroke="#868e96" stroke-width="1" stroke-dasharray="10,6"/>
+<text x="56" y="2135.0" font-size="13" font-family="Helvetica, sans-serif" text-anchor="start" fill="#343a40">WHY IMMUTABLE VERSIONED KEYS PAY OFF TWICE</text>
+<text x="56" y="2160.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057">bytes at a blobKey never change ⇒ If-Range can</text>
+<text x="56" y="2175.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057">NEVER mismatch ⇒ the 200-full-body path never fires</text>
+<text x="56" y="2190.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057">⇒ resume always succeeds, however long you were offline.</text>
+<text x="56" y="2205.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057"></text>
+<text x="56" y="2220.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057">Same decision already removed object-store overwrite</text>
+<text x="56" y="2235.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057">consistency from the picture (§6).</text>
+<text x="56" y="2250.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057"></text>
+<text x="56" y="2265.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057">Parallel segmented download: 4 concurrent ranges</text>
+<text x="56" y="2280.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057">pwrite() into a preallocated sparse file — beats one</text>
+<text x="56" y="2295.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057">window/RTT-limited TCP stream; each segment resumes</text>
+<text x="56" y="2310.0" font-size="12" font-family="monospace" text-anchor="start" fill="#495057">independently. Cost: 4× conns, more CDN pressure.</text>
+<rect x="40" y="2360" width="1410" height="66" rx="10" fill="#f8f9fa" stroke="#868e96" stroke-width="1" stroke-dasharray="10,6"/>
+<text x="52" y="2390.0" font-size="12" font-family="monospace" text-anchor="start" fill="#1e1e1e">THE ASYMMETRY —  upload resume is STATEFUL: the server holds durable partial state (uploadId + landed parts) and the client asks &quot;what did you get?&quot;</text>
+<text x="52" y="2405.0" font-size="12" font-family="monospace" text-anchor="start" fill="#1e1e1e">                 download resume is STATELESS: the client holds the partial state and tells the server &quot;start from here&quot;, with If-Range guarding correctness.</text>
+</svg>
