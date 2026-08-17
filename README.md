@@ -20,7 +20,7 @@ Study pack for platform/system-design rounds. One detailed writeup per question.
 |---|----------|------|
 | 6 | Okta system design topics — speakable crib sheet across the recurring themes | [06-okta-system-design-topics.md](./06-okta-system-design-topics.md) |
 | 7 | Backup & recovery system (consistency, RPO/RTO, restore guarantees, cost/scale tradeoffs) | [07-backup-and-recovery-system.md](./07-backup-and-recovery-system.md) |
-| 8 | Push notification service (Kafka fan-out, provider abstractions, rate limiting, scheduling, dedup, retries) | [08-push-notification-service.md](./08-push-notification-service.md) |
+| 8 | Push notification service (Kafka fan-out, provider abstractions, rate limiting, scheduling, dedup, retries) — plus follow-ups on failure handling, horizontal scaling, sharding, caching | [08-push-notification-service.md](./08-push-notification-service.md) |
 | 9 | Single sign-on (SSO) system (token handling, session lifecycle, third-party IdP federation) | [09-signle-sign-on-system-design.md](./09-signle-sign-on-system-design.md) |
 
 ## How to drive any system design answer (say this structure out loud)

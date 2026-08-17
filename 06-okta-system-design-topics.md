@@ -23,23 +23,7 @@
 
 ### High-level diagram
 
-```mermaid
-flowchart LR
-  U["User hits Enter"] --> BR["Browser<br/>HSTS check, browser cache"]
-  BR --> DNS["DNS resolve<br/>browser → OS → resolver → root → TLD → authoritative"]
-  DNS --> TCP["TCP handshake<br/>SYN, SYN-ACK, ACK — 1 RTT"]
-  TCP --> TLS["TLS 1.3 handshake<br/>1-RTT, 0-RTT on resume, ALPN picks H2/H3"]
-  TLS --> REQ["HTTP request<br/>H2 multiplexed streams or H3 over QUIC"]
-  REQ --> EDGE{"CDN edge PoP<br/>cacheable hit?"}
-  EDGE -- "hit" --> RESP["HTTP response<br/>status, Cache-Control, ETag, Set-Cookie"]
-  EDGE -- "miss" --> LB["Load balancer<br/>L4 or L7, health-checked"]
-  LB --> APP["App servers — stateless"]
-  APP --> RD{"App cache<br/>Redis hit?"}
-  RD -- "hit" --> RESP
-  RD -- "miss" --> DB[("Database<br/>+ buffer pool")]
-  DB --> RESP
-  RESP --> RENDER["Browser render — see section 2"]
-```
+![Request end-to-end: URL to rendered page](./diagrams/06-okta-system-design-topics/06-okta-diagram-01.png)
 
 - **URL parse**: scheme, host, port, path, query. Browser checks HSTS list (forces HTTPS).
 - **DNS resolution**: browser cache → OS cache → resolver (ISP/8.8.8.8) → root → TLD → authoritative. Returns IP. Anycast + low TTLs for failover. ~geo-routing here for CDN edge selection.
@@ -59,25 +43,7 @@ flowchart LR
 
 ### High-level diagram
 
-```mermaid
-flowchart TD
-  NET["Network process<br/>fetches bytes"] --> HTML["HTML parser — incremental"]
-  NET --> CSSB["CSS bytes"]
-  NET --> JSB["JS bytes"]
-  HTML --> DOM["DOM tree"]
-  CSSB --> CSSOM["CSSOM — render-blocking"]
-  JSB --> JS["JS execution<br/>parser-blocking unless async or defer"]
-  JS -. "reads and mutates" .-> DOM
-  JS -. "reads and mutates" .-> CSSOM
-  DOM --> RT["Render tree<br/>visible nodes only, display:none excluded"]
-  CSSOM --> RT
-  RT --> LAY["Layout / reflow<br/>geometry: position + size"]
-  LAY --> PAINT["Paint<br/>pixels into layers"]
-  PAINT --> COMP["Composite — GPU process"]
-  COMP --> SCREEN["Pixels on screen"]
-  LAY -. "layout thrashing" .-> LAY
-  COMP -. "transform / opacity animate here — cheap" .-> COMP
-```
+![Browser rendering pipeline](./diagrams/06-okta-system-design-topics/06-okta-diagram-02.png)
 
 - **HTML parse → DOM tree** (incremental; parser can stream).
 - **CSS parse → CSSOM**. CSS is **render-blocking**; browser won't paint until CSSOM is ready.
@@ -97,31 +63,7 @@ flowchart TD
 
 ### High-level diagram
 
-```mermaid
-flowchart LR
-  subgraph CLIENT["Client"]
-    C1["Fewer bytes: brotli, minify, tree-shake, WebP/AVIF, lazy-load"]
-    C2["Render fast: inline critical CSS, defer JS, code-split"]
-    C3["Perceived: skeletons, optimistic UI, prefetch on hover"]
-  end
-  subgraph NET["Network"]
-    N1["Fewer round trips: H2 multiplexing, H3/QUIC, keep-alive"]
-    N2["Hints: preconnect, dns-prefetch, preload"]
-  end
-  subgraph EDGE["CDN / edge"]
-    E1["Immutable hashed assets, long TTL"]
-    E2["Edge compute + short-TTL API cache"]
-    E3["Service worker for offline"]
-  end
-  subgraph ORIGIN["Origin"]
-    O1["SSR / streaming SSR"]
-    O2["Redis cache, read replicas, denormalize"]
-    O3["Queue non-critical work off the request path"]
-  end
-  CLIENT --> NET --> EDGE --> ORIGIN
-  ORIGIN --> CWV["Core Web Vitals<br/>LCP ≤ 2.5s · INP ≤ 200ms · CLS ≤ 0.1"]
-  CLIENT --> CWV
-```
+![Web performance levers by tier](./diagrams/06-okta-system-design-topics/06-okta-diagram-03.png)
 
 - **Core Web Vitals**: **LCP** (largest content paint, ≤2.5s), **INP** (interaction responsiveness, ≤200ms; replaced FID), **CLS** (layout shift, ≤0.1).
 - **Fewer bytes**: gzip/brotli compression, minify, tree-shake, image formats (WebP/AVIF), responsive images, lazy-load.
@@ -139,24 +81,7 @@ flowchart LR
 
 ### High-level diagram
 
-```mermaid
-flowchart TD
-  U["Users worldwide"] --> GEO["GeoDNS / Anycast<br/>route to nearest region"]
-  GEO --> POP["CDN edge PoP<br/>cache key = URL + selected headers, TTL, purge by tag"]
-  POP -- "miss" --> SHIELD["Origin shield<br/>mid-tier cache, absorbs stampedes"]
-  SHIELD -- "miss" --> LB["Regional load balancer<br/>L4 by IP/port or L7 by path/host/header<br/>round-robin, least-conn, consistent hash"]
-  LB -- "active + passive health checks" --> N1["App node 1 — stateless"]
-  LB --> N2["App node 2 — stateless"]
-  LB --> N3["App node N — stateless"]
-  N1 --> CACHE[("App cache — Redis/Memcached<br/>cache-aside, write-through, TTL + jitter")]
-  N2 --> CACHE
-  N3 --> CACHE
-  CACHE -- "miss" --> DB[("Primary DB + read replicas<br/>buffer pool")]
-  N1 -. "no sticky sessions" .-> SESS[("Shared session store")]
-  N2 -.-> SESS
-  N3 -.-> SESS
-  CACHE -. "failure modes" .-> F["Stampede → coalesce + jittered TTL<br/>Hot key → split/replicate<br/>Penetration → cache negatives + bloom filter"]
-```
+![CDN, load balancing and caching](./diagrams/06-okta-system-design-topics/06-okta-diagram-04.png)
 
 ### CDN
 - Edge PoPs serve static/cacheable content close to users (low latency, offloads origin).
@@ -189,27 +114,7 @@ flowchart TD
 
 ### High-level diagram
 
-```mermaid
-flowchart TD
-  APP["App tier"] --> CL["Cache client / proxy<br/>consistent hash ring + virtual nodes<br/>add/remove node remaps ~1/N keys"]
-  CL --> SA
-  CL --> SB
-  CL --> SC
-  subgraph SA["Shard A — slots 0-5460"]
-    PA[("Primary A")] -. "async replicate → stale reads possible" .-> RA[("Replica A")]
-  end
-  subgraph SB["Shard B — slots 5461-10922"]
-    PB[("Primary B")] -. "async replicate" .-> RB[("Replica B")]
-  end
-  subgraph SC["Shard C — slots 10923-16383"]
-    PC[("Primary C")] -. "async replicate" .-> RC[("Replica C")]
-  end
-  SA -. "gossip / failover" .- SB
-  SB -. "gossip / failover" .- SC
-  CL -- "node down or miss" --> DB[("Database — watch for stampede")]
-  SA -. "cross-region replication for locality" .-> REG[("Other region<br/>sessions region-pinned, global lookup")]
-  EV["Eviction: LRU / LFU / TTL — size to working set"] -.-> SA
-```
+![Distributed cache topology](./diagrams/06-okta-system-design-topics/06-okta-diagram-05.png)
 
 - **Why distributed**: single cache node can't hold the dataset or the QPS; need horizontal scale.
 - **Sharding**: **consistent hashing** (hash ring) so adding/removing a node only remaps ~1/N keys, not everything. **Virtual nodes** smooth out hot spots.
@@ -228,24 +133,7 @@ flowchart TD
 
 ### High-level diagram
 
-```mermaid
-flowchart TD
-  CLIENT["Clients"] --> GATE["Edge / gateway<br/>rate limiting, timeouts, circuit breakers, bulkheads"]
-  GATE --> APP["Stateless app tier<br/>horizontal autoscale behind LB"]
-  APP --> SESS[("Shared state store<br/>sessions, so any node serves any request")]
-  APP -- "reads" --> CACHE[("Cache layer")]
-  CACHE -- "miss" --> REPL[("Read replicas")]
-  APP -- "writes" --> PRI[("Write primary")]
-  PRI --> SH1[("Shard 1 — by key")]
-  PRI --> SH2[("Shard 2")]
-  PRI --> SHN[("Shard N")]
-  APP -- "non-critical work off the request path" --> Q[["Queue — Kafka / SQS"]]
-  Q --> WORK["Async workers<br/>audit logs, email, provisioning"]
-  WORK --> SH1
-  APP -. "degrade gracefully" .-> DEG["Serve stale cache, shed load, feature-flag expensive paths"]
-  OBS["Observability: RED metrics, tracing, SLOs"] -. "you cannot scale what you cannot see" .- APP
-  CAP["CAP for auth: AP for token validation reads, CP for revocation/logout"] -.-> APP
-```
+![Performance and scale patterns](./diagrams/06-okta-system-design-topics/06-okta-diagram-06.png)
 
 - **Vertical vs horizontal**: prefer horizontal (stateless app tier behind LB).
 - **Stateless services** + shared state store → any node serves any request, trivial autoscaling. (Directly relevant to session design.)
@@ -264,62 +152,11 @@ flowchart TD
 
 ### High-level diagram (architecture)
 
-```mermaid
-flowchart TD
-  B["Browser<br/>holds IdP session cookie scoped to org.okta.com<br/>plus a separate app session cookie per SP"]
-  B -- "redirect — the browser is the courier" --> EDGE["Global edge: GeoDNS / anycast → regional LB"]
-  EDGE --> AUTHZ["/authorize — auth endpoint<br/>reads IdP session cookie, prompts + MFA if none"]
-  EDGE --> TOKEN["/token — token endpoint<br/>code + PKCE verifier exchange, stateless, scales horizontally"]
-  EDGE --> SAML["SAML SSO endpoint<br/>signs assertion, POSTs to SP ACS"]
-  EDGE --> JWKS["/keys — JWKS<br/>public keys, key rotation"]
-  AUTHZ --> MFA["MFA service — FIDO2/WebAuthn, push, TOTP"]
-  AUTHZ --> SESSTORE[("IdP session store — the crown jewel<br/>Redis Cluster, replicated, region-pinned, low latency")]
-  TOKEN --> SESSTORE
-  TOKEN --> SIGN[("Signing keys — HSM / KMS")]
-  AUTHZ --> DIR[("User directory + org config + policies<br/>cached, read-heavy")]
-  TOKEN --> REVOKE[("Revocation / denylist store<br/>strongly consistent, checked on sensitive ops")]
-  AUTHZ --> AUDIT[["Async queue → audit logs, risk signals, notifications"]]
-  B -- "signed token or assertion" --> SP1["App A — app-a.com<br/>validates signature via JWKS, local app session"]
-  B --> SP2["App B — app-b.com"]
-  B --> SPN["App N — 100s of SPs"]
-  SP1 -. "back-channel logout + introspection" .-> REVOKE
-```
+![Cross-domain SSO architecture](./diagrams/06-okta-system-design-topics/06-okta-diagram-07.png)
 
 ### High-level diagram (SSO across two domains)
 
-```mermaid
-sequenceDiagram
-  autonumber
-  participant B as Browser
-  participant A as App A — app-a.com
-  participant I as Okta IdP — org.okta.com
-  participant C as App B — app-b.com
-
-  Note over B,A: First app — no IdP session exists yet
-  B->>A: GET /protected, unauthenticated
-  A-->>B: 302 to IdP /authorize with client_id, redirect_uri, scope, state, nonce, code_challenge
-  B->>I: GET /authorize, no IdP session cookie
-  I-->>B: Login page, then MFA challenge
-  B->>I: Credentials + MFA factor
-  I-->>B: Set IdP session cookie, 302 back to redirect_uri with code + state
-  B->>A: GET /callback with code + state
-  A->>I: POST /token with code + code_verifier
-  I-->>A: ID token, access token, refresh token
-  A->>I: GET /keys for JWKS, validate signature, iss, aud, exp, nonce
-  A-->>B: Set App A session cookie
-
-  Note over B,C: Second app, different domain — this is the single in single sign-on
-  B->>C: GET /protected, unauthenticated
-  C-->>B: 302 to IdP /authorize
-  B->>I: GET /authorize, browser attaches the IdP session cookie
-  I-->>B: 302 back with code — silent, no prompt
-  B->>C: GET /callback with code
-  C->>I: POST /token
-  I-->>C: Tokens
-  C-->>B: Set App B session cookie
-
-  Note over B,C: Apps never share cookies. They only trust the IdP's signed tokens.
-```
+![SSO across two domains — sequence](./diagrams/06-okta-system-design-topics/06-okta-diagram-08.png)
 
 ### The core mental model
 - Three roles: **User (browser)**, **IdP / Authorization Server** (Okta), **SP / RP / client app** (the thing you're logging into).
@@ -387,20 +224,7 @@ sequenceDiagram
 
 ### High-level diagram (the answer spine)
 
-```mermaid
-flowchart TD
-  Q1{"Do you need instant revocation?"}
-  Q1 -- "No — optimize for scale" --> JWT["JWT<br/>self-contained, local validation via JWKS, no IdP round trip"]
-  Q1 -- "Yes — high-value operation" --> OPQ["Opaque token<br/>/introspect on every check, revocable, extra hop"]
-  JWT --> HYB["Hybrid — the answer to give<br/>short-TTL JWT + rotating refresh tokens<br/>+ distributed denylist checked on sensitive ops"]
-  OPQ --> HYB
-  HYB --> SSO["Design SSO for 100 apps<br/>one IdP session, OIDC code + PKCE, stateless apps,<br/>shared session store, back-channel logout"]
-  SSO --> BN{"Where is the bottleneck?"}
-  BN --> B1["/authorize + /token endpoints<br/>stateless → scale horizontally, rate-limit"]
-  BN --> B2["Session store<br/>Redis Cluster, consistent hashing, primary-replica, region-pinned + global lookup"]
-  BN --> B3["Config / key lookups<br/>cache org config, cache JWKS"]
-  SSO --> SIL["Why the second app is silent<br/>its redirect carries the IdP session cookie → token issued with no prompt"]
-```
+![Token choice and bottleneck decision tree](./diagrams/06-okta-system-design-topics/06-okta-diagram-09.png)
 
 - **"Design SSO for a company with 100 apps."** → IdP holds one session; apps trust signed tokens (OIDC code+PKCE); stateless apps + shared session store; short-lived access tokens + rotating refresh tokens; JWKS for validation; back-channel logout + revocation list.
 - **"JWT or opaque tokens?"** → JWT for scale (local validation), opaque for revocability; hybrid = short JWT + refresh + revocation check on sensitive actions.
@@ -415,19 +239,7 @@ flowchart TD
 
 ### High-level diagram (when to drop each line)
 
-```mermaid
-flowchart LR
-  T1["Minutes 0-5<br/>Clarify + scale math"] --> T2["Minutes 5-15<br/>Draw the happy path"]
-  T2 --> T3["Minutes 15-30<br/>Find the bottleneck, scale it"]
-  T3 --> T4["Minutes 30-40<br/>Failure modes + security"]
-  T4 --> T5["Wrap-up<br/>Restate the tradeoffs"]
-  T1 -.-> P1["'Let me clarify the constraints and rough out the scale before I draw anything.'"]
-  T2 -.-> P2["'The IdP session is the shared state that makes SSO single — apps only ever trust signed tokens.'"]
-  T3 -.-> P3["'I'll keep the app tier stateless so I can autoscale behind the LB and avoid sticky sessions.'"]
-  T4 -.-> P4["'For logout I'd lean on short token lifetimes plus back-channel logout, since front-channel SLO is unreliable.'"]
-  T4 -.-> P5["'Security-wise: state for CSRF, PKCE for code interception, exact-match redirect URIs, JWKS for key rotation.'"]
-  T5 -.-> P6["'This is a consistency-vs-latency tradeoff: local JWT validation for speed, short TTL + denylist for revocation.'"]
-```
+![Interview timeline and phrases](./diagrams/06-okta-system-design-topics/06-okta-diagram-10.png)
 
 - "Let me clarify the constraints and rough out the scale before I draw anything."
 - "I'll keep the app tier stateless so I can autoscale behind the LB and avoid sticky sessions."
@@ -444,37 +256,7 @@ flowchart LR
 
 ### High-level diagram
 
-```mermaid
-flowchart TD
-  subgraph SRC["Protected data — different RPO/RTO per class"]
-    D1[("Identity DB: users, credentials")]
-    D2[("Org config + policies")]
-    D3[("Signing keys — HSM / KMS")]
-    D4[("Audit logs")]
-    D5[("Object storage")]
-  end
-  D1 -- "weekly full + daily incremental" --> ORCH
-  D1 -- "continuous WAL / binlog shipping → near-zero RPO" --> ORCH
-  D2 --> ORCH
-  D3 -- "key backup, separate blast radius" --> KMSB[("Separate KMS/HSM vault")]
-  D4 --> ORCH
-  D5 -- "snapshots — copy-on-write" --> ORCH
-  ORCH["Backup orchestrator<br/>app-consistent quiesce, encrypt in transit + at rest, checksum<br/>per-shard + logical timestamp for a coherent global point"]
-  ORCH --> HOT[("Hot tier — recent, fast restore")]
-  HOT -- "lifecycle by retention age" --> WARM[("Warm tier")]
-  WARM --> COLD[("Cold — Glacier, GFS retention, compliance")]
-  ORCH --> IMM[("Immutable offsite copy<br/>WORM / object-lock, air-gapped — ransomware defense")]
-  D4 --> WORM[("Audit logs → WORM, long retention for SOC2")]
-  HOT --> REST["Restore flow<br/>locate → provision target → restore base → replay WAL to point-in-time<br/>→ validate checksums/row counts → cut over DNS → failback"]
-  IMM --> REST
-  REST --> TIER{"DR tier matched to the stated RTO"}
-  TIER --> R1["Backup + restore, cold — RTO hours, cheapest"]
-  TIER --> R2["Pilot light — minimal core always on"]
-  TIER --> R3["Warm standby — scaled-down replica, fast promote"]
-  TIER --> R4["Hot standby / multi-region active-active — near-zero RTO"]
-  TEST["Automated restore drills, game days,<br/>silent-failure + RPO/RTO compliance monitoring"] -. "an untested backup is a hope" .- REST
-  IAM["Least-privilege + MFA on the backup plane"] -. "compromised backup admin = total loss" .- ORCH
-```
+![Backup and recovery system](./diagrams/06-okta-system-design-topics/06-okta-diagram-11.png)
 
 ### Requirements first (drive the whole design)
 - **RPO (Recovery Point Objective)** = max acceptable data loss → sets **backup frequency**. Near-zero RPO ⇒ continuous log/WAL shipping.
@@ -539,38 +321,7 @@ flowchart TD
 
 ### High-level diagram
 
-```mermaid
-flowchart TD
-  P["Producers: auth service MFA/OTP, admin actions, webhook triggers"] --> API["Notification API — thin<br/>authn/authz, validate, idempotency key on tenant+event_id, returns 202"]
-  API --> RL["Per-tenant rate limits + quotas<br/>noisy-neighbor defense, fair/weighted scheduling"]
-  RL --> QC[["critical lane — MFA OTP, security alerts"]]
-  RL --> QT[["transactional lane"]]
-  RL --> QB[["bulk lane"]]
-  QC --> ROUTE
-  QT --> ROUTE
-  QB --> ROUTE
-  ROUTE["Router / dispatcher<br/>resolve recipient → channels, apply prefs, opt-out, quiet hours, compliance"]
-  PREF[("Preference + subscription store<br/>cached")] -.-> ROUTE
-  TPL[("Template service — versioned, per-tenant, localized<br/>cached")] -.-> ROUTE
-  ROUTE --> WC["Critical workers — dedicated capacity<br/>OTP p99 under 2s"]
-  ROUTE --> WG["General worker pool — stateless, autoscale on queue depth"]
-  WC --> AD["Channel adapters — common interface"]
-  WG --> AD
-  AD --> PR1["Email — SES"]
-  AD --> PR2["SMS — Twilio"]
-  AD --> PR3["Push — FCM / APNs"]
-  AD --> PR4["Webhook — customer endpoint"]
-  AD -. "circuit breaker on degrade" .-> FB["Secondary provider per channel"]
-  PR1 --> TRACK[("Tracking store<br/>queued → sent → delivered → failed, audit + analytics")]
-  PR2 --> TRACK
-  PR3 --> TRACK
-  PR4 --> TRACK
-  PR2 -. "delivery receipts / callbacks" .-> TRACK
-  AD -- "retry with exponential backoff + jitter, capped" --> AD
-  AD -- "poison message or attempts exhausted" --> DLQ[["Dead letter queue — inspect + replay"]]
-  BP["Backpressure: shed or deprioritize bulk to protect the critical lane"] -.-> RL
-  TEN["Multi-tenancy: tenant_id on every record, tenant-scoped keys + encryption,<br/>dedicated queues/workers for large or regulated tenants"] -.-> ROUTE
-```
+![Multi-tenant notification service](./diagrams/06-okta-system-design-topics/06-okta-diagram-12.png)
 
 ### Frame it right (the Okta insight)
 - At Okta this is **transactional, auth-critical** delivery — MFA OTPs (SMS/push/email), "new device sign-in" alerts, security notifications, webhooks to customer systems. **Not** marketing.
