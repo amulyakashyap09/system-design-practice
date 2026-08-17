@@ -2,8 +2,6 @@
 
 **One-liner:** A metadata service (SQL) that tracks files, versions, and permissions, sitting in front of an object store (blob storage) that holds the actual bytes; large files are uploaded in chunks via presigned URLs straight to the blob store, with a CDN in front for reads and async workers for replication, dedup, and virus scan.
 
-**Diagram:** [`diagrams/01-file-storage-service.excalidraw`](diagrams/01-file-storage-service.excalidraw) — see [§8](#8-diagram-excalidraw).
-
 ---
 
 ## 1. Clarify requirements
@@ -260,7 +258,7 @@ Upside: a single TCP stream is window/RTT-limited, so 4 connections often multip
 
 ## 8. Diagram (Excalidraw)
 
-![File Storage Service — architecture and resume paths](diagrams/01-file-storage-service.svg)
+![File Storage Service — architecture and resume paths](./diagrams/01-file-storage-service.png)
 
 **Source:** [`diagrams/01-file-storage-service.excalidraw`](diagrams/01-file-storage-service.excalidraw) — open at [excalidraw.com](https://excalidraw.com) via *Menu → Open*, or just drag the file onto the canvas. The `.svg` above is an export for inline viewing; **edit the `.excalidraw`, not the SVG.**
 

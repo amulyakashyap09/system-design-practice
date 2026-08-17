@@ -1,16 +1,27 @@
-# Agoda Platform Round — System Design Prep
+# System Design Prep
 
-Study pack for the platform/system-design round. Five questions, one detailed writeup each. Read this README first: it gives you a **repeatable structure** to drive every answer and a **pattern cheat sheet** for the concepts that recur across the flight/booking/ticketing questions.
+Study pack for platform/system-design rounds. One detailed writeup per question. Read this README first: it gives you a **repeatable structure** to drive every answer and a **pattern cheat sheet** for the concepts that recur across the questions.
 
 ## Files
 
+### Agoda platform round (travel / booking theme)
+
 | # | Question | File |
 |---|----------|------|
-| 1 | File storage service (S3 / Dropbox style) | `01-file-storage-service.md` |
-| 2 | Flight aggregation / search system | `02-flight-aggregation-system.md` |
-| 3 | Scaling & reliability of the aggregator feed (rate limiting, API correctness, horizontal scaling, DB replication, testing, canary) | `03-aggregator-scaling-and-reliability.md` |
-| 4 | Flight booking system (contention, payments, failure handling, aggregator sync) | `04-flight-booking-system.md` |
-| 5 | Event ticket booking (concurrency, no double-book, no oversell, abuse protection, resilience) | `05-event-ticket-booking-system.md` |
+| 1 | File storage service (S3 / Dropbox style) | [01-file-storage-service.md](./01-file-storage-service.md) |
+| 2 | Flight aggregation / search system | [02-flight-aggregation-system.md](./02-flight-aggregation-system.md) |
+| 3 | Scaling & reliability of the aggregator feed (rate limiting, API correctness, horizontal scaling, DB replication, testing, canary) | [03-aggregator-scaling-and-reliability.md](./03-aggregator-scaling-and-reliability.md) |
+| 4 | Flight booking system (contention, payments, failure handling, aggregator sync) | [04-flight-booking-system.md](./04-flight-booking-system.md) |
+| 5 | Event ticket booking (concurrency, no double-book, no oversell, abuse protection, resilience) | [05-event-ticket-booking-system.md](./05-event-ticket-booking-system.md) |
+
+### Okta round (identity / infrastructure theme)
+
+| # | Question | File |
+|---|----------|------|
+| 6 | Okta system design topics — speakable crib sheet across the recurring themes | [06-okta-system-design-topics.md](./06-okta-system-design-topics.md) |
+| 7 | Backup & recovery system (consistency, RPO/RTO, restore guarantees, cost/scale tradeoffs) | [07-backup-and-recovery-system.md](./07-backup-and-recovery-system.md) |
+| 8 | Push notification service (Kafka fan-out, provider abstractions, rate limiting, scheduling, dedup, retries) | [08-push-notification-service.md](./08-push-notification-service.md) |
+| 9 | Single sign-on (SSO) system (token handling, session lifecycle, third-party IdP federation) | [09-signle-sign-on-system-design.md](./09-signle-sign-on-system-design.md) |
 
 ## How to drive any system design answer (say this structure out loud)
 
@@ -26,9 +37,9 @@ Golden rule: **there is no single right answer; there is defended reasoning.** A
 
 ---
 
-## Cross-cutting pattern cheat sheet
+## Cross-cutting pattern cheat sheet — booking (3, 4, 5)
 
-These appear in 3, 4, and 5. Know them cold; you'll reuse the same 6 patterns for three questions.
+Know them cold; you'll reuse the same 6 patterns for three questions.
 
 ### 1. Reservation / hold with TTL (the anti-double-booking primitive)
 Don't hold a DB row lock across the seconds/minutes a human takes to pay. Instead:
@@ -67,8 +78,34 @@ Anything slow, spiky, or best-effort goes on a **queue** (Kafka/SQS): payments c
 
 ---
 
+## Cross-cutting pattern cheat sheet — identity & infra (6, 7, 8, 9)
+
+The same handful of ideas carry the Okta-flavoured questions.
+
+### 1. Token vs session (the SSO fork in the road)
+Stateful sessions (server-side store, easy revocation, needs a fast shared cache) vs stateless JWTs (no lookup, scales horizontally, but **revocation is the hard part**). The standard answer: short-lived access tokens + long-lived refresh tokens, plus a denylist/`jti` check or key rotation for emergency revocation. Say the tradeoff out loud — that's the graded part.
+
+### 2. Federation protocols — SAML vs OIDC
+SAML 2.0 for enterprise/browser SSO (XML assertions, POST binding); OIDC on top of OAuth2 for modern apps, SPAs, mobile, APIs. Core mental model is the same: the IdP holds *the* session, each SP gets its own derived session via a redirect + signed assertion/token. "Single" means one authentication at the IdP, not one cookie everywhere.
+
+### 3. Single Logout, and third-party cookie deprecation
+SLO is genuinely hard — front-channel iframes are fragile, back-channel needs every SP to implement a logout endpoint. Third-party cookie deprecation breaks the classic cross-domain tricks, which is a sharp, current thing to raise unprompted.
+
+### 4. Keeping the IdP off the critical path
+An IdP is a hard availability dependency for every downstream app. Cache/validate locally (public keys via JWKS, short token TTLs), multi-region active-active, and degrade gracefully rather than failing every login globally.
+
+### 5. RPO / RTO drives every backup decision
+Requirements first: how much data can you lose (RPO), how long can you be down (RTO). Everything else — full vs incremental vs differential, snapshot consistency, storage tiering, hot/warm/cold DR — falls out of those two numbers and the cost curve. **Untested backups don't exist**: restore drills are the answer to "where do real systems fail?"
+
+### 6. Fan-out pipeline (notifications)
+Ingest → partitioned queue → channel-specific dispatchers behind provider abstractions, with rate limiting, scheduling, dedup, and retries as *separate* concerns off the main path. Multi-tenancy means per-tenant quotas and noisy-neighbour isolation. Provider abstraction = swap vendors, per-channel retry/DLQ semantics.
+
+Note the overlap with the booking patterns: idempotency (#3), async decoupling + DLQs (#6), rate limiting (#5), and the reliability building blocks above apply verbatim to the notification service.
+
+---
+
 ## Interview-day tips
 - **Lead with the summary, then the bullets.** State the one-line approach, then expand. Don't build the whole thing silently.
 - **Drive the whiteboard.** Propose structure; let them redirect. Silence reads as being stuck.
-- Agoda is a **travel/booking** company — every question here is on-theme. Expect them to push on **provider/GDS integration, availability freshness, price accuracy, overbooking, and payment failure handling**. Those are the "hard parts" they care about operationally.
+- **Know the company's theme.** Agoda is **travel/booking** — expect pushes on **provider/GDS integration, availability freshness, price accuracy, overbooking, and payment failure handling**. Okta is **identity infrastructure** — expect **session/token lifecycle, SAML vs OIDC, single logout, revocation, multi-tenancy, and IdP availability**. Those are the "hard parts" each cares about operationally.
 - When you don't know, **reason from first principles out loud** and state your assumption. That's the signal they're grading.
