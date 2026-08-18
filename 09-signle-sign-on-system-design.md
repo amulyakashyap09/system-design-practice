@@ -58,6 +58,8 @@ Non-functional
 
 ![09-sso-system-diagram.png](./diagrams/09-sso-system/09-sso-system-diagram.png)
 
+![09-sso-system-diagram-colorful.png](./diagrams/09-sso-system/09-sso-system-diagram-02.png)
+
 Here's the whiteboard — the OIDC Authorization Code + PKCE flow across the four actors:Flow walkthrough (what to say while pointing at each arrow):
 
 1. User hits App A → no session, so App A starts an authorization request.
