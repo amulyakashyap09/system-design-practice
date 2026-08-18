@@ -107,3 +107,197 @@ How each layer avoids being the SPOF:
 
 Trade-off to name: active-active buys zero-failover-lag availability but forces you to handle replication lag and write conflicts — a session created in Region A may not be in Region B for a few ms, which you paper over with sticky-region routing or a token any region can validate. Active-passive is simpler but wastes standby capacity and eats failover time. For auth, active-active is usually worth it.
 
+## TOTP — Time-based One-Time Password
+
+Most MFA apps use **TOTP — Time-based One-Time Password**.
+
+The reason the code expires quickly **but still matches** is that **both your phone and the server independently generate the same code using the same secret and the current time**.
+
+## 1. During MFA setup
+
+When you scan a QR code, it contains a secret like:
+
+```text
+JBSWY3DPEHPK3PXP
+```
+
+That secret is stored in:
+
+```text
+Your Authenticator App
+        AND
+Authentication Server
+```
+
+The secret is never sent every time you log in.
+
+---
+
+## 2. Both use the current time
+
+Suppose the current Unix time is:
+
+```text
+1723973400
+```
+
+TOTP divides time into fixed windows, usually **30 seconds**:
+
+```text
+Time Step = floor(current_time / 30)
+```
+
+For example:
+
+```text
+Current time: 10:00:00
+          |
+          v
+Window: 1234567
+```
+
+Both your phone and server calculate the same time window.
+
+Then they do something conceptually like:
+
+```text
+Secret + Time Window
+        |
+        v
+     HMAC Hash
+        |
+        v
+  Extract 6 digits
+        |
+        v
+      483921
+```
+
+Your phone:
+
+```text
+Secret: ABC
+Time window: 1234567
+
+↓ same algorithm
+
+483921
+```
+
+Server:
+
+```text
+Secret: ABC
+Time window: 1234567
+
+↓ same algorithm
+
+483921
+```
+
+So they independently arrive at the same code.
+
+## 3. Why does it expire after 30 seconds?
+
+At:
+
+```text
+10:00:00 → Time Window 100
+```
+
+Both generate:
+
+```text
+483921
+```
+
+At:
+
+```text
+10:00:30 → Time Window 101
+```
+
+Both generate a completely different code:
+
+```text
+817452
+```
+
+So:
+
+```text
+Time                  Code
+--------------------------------
+10:00:00–10:00:29     483921
+10:00:30–10:00:59     817452
+10:01:00–10:01:29     234901
+```
+
+## 4. What if you enter it right at expiry?
+
+Servers usually allow a small time tolerance.
+
+For example, when you submit:
+
+```text
+483921
+```
+
+The server may check:
+
+```text
+Previous 30-second window
+Current 30-second window
+Next 30-second window
+```
+
+Conceptually:
+
+```text
+Expected codes:
+
+Window 99  → 123456
+Window 100 → 483921
+Window 101 → 817452
+```
+
+This handles small clock differences between your phone and the server.
+
+So even if your code expires on the phone **just as you submit it**, the server may still accept it if it falls within the allowed tolerance.
+
+## Simplified algorithm
+
+Conceptually:
+
+```javascript
+const timeStep = Math.floor(Date.now() / 1000 / 30);
+
+const hash = HMAC_SHA1(secret, timeStep);
+
+const otp = extract6Digits(hash);
+```
+
+The server runs essentially the same calculation:
+
+```javascript
+const currentStep = Math.floor(Date.now() / 1000 / 30);
+
+for (const step of [
+  currentStep - 1,
+  currentStep,
+  currentStep + 1
+]) {
+    const expectedCode = generateTOTP(secret, step);
+
+    if (userEnteredCode === expectedCode) {
+        return true;
+    }
+}
+```
+
+The important point is:
+
+> **The server does not need your phone to send it the generated code beforehand. Both sides already know the secret and independently calculate what the valid code should be.**
+
+That's also why **time synchronization matters**. If your phone's clock is several minutes wrong, your authenticator codes may fail because your phone and the server are calculating different time windows.
+
